@@ -2,7 +2,7 @@
 <html lang="vi"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Phim</title>
-<link rel="manifest" href="manifest.json"><meta name="theme-color" content="#101010"><link rel="apple-touch-icon" href="icon-192.png"><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='112' fill='%230f0f0f'/%3E%3Ccircle cx='256' cy='256' r='160' fill='%233dc888'/%3E%3Cpolygon points='222,184 350,256 222,328' fill='white'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://wsrv.nl"><link rel="preconnect" href="https://phimimg.com"><link rel="dns-prefetch" href="https://img.ophim.live"><link rel="manifest" href="manifest.json"><meta name="theme-color" content="#101010"><link rel="apple-touch-icon" href="icon-192.png"><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='112' fill='%230f0f0f'/%3E%3Ccircle cx='256' cy='256' r='160' fill='%233dc888'/%3E%3Cpolygon points='222,184 350,256 222,328' fill='white'/%3E%3C/svg%3E">
 <style>
 :root{--bg:#101010;--fg:#fff;--mut:#9a9a9a;--card:#262626;--g:#3dc888;--y:#e3ad23;color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#101010;--fg:#fff;--mut:#9a9a9a;--card:#262626}}
@@ -62,6 +62,7 @@ nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:#111;padding:
 .box{background:var(--card);border-radius:14px;padding:22px;max-width:520px;width:100%;display:flex;flex-direction:column;gap:12px}
 .box input{padding:12px;border-radius:8px;border:2px solid #444;background:var(--bg);color:var(--fg);font:inherit}.msg{color:var(--mut);font-size:.85rem}
 .btn{background:#383838;border-radius:8px;padding:10px 16px}.btn.p{background:var(--g);color:#111;font-weight:700}
+.pz img{opacity:0;transition:opacity .25s}.pz img.l{opacity:1}
 @media(min-width:900px){.c{width:170px}.cf{height:460px}.hs{width:140px}}
 </style></head>
 <body>
@@ -80,14 +81,19 @@ nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:#111;padding:
 <input id="apiIn" placeholder="https://phimapi.com/v1/api/danh-sach/phim-bo" autocomplete="off">
 <div class="msg" id="apiMsg">Dán link JSON danh sách phim (KKPhim, OPhim...). Nên dùng link v1 để có đủ loại phim.</div>
 <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn p f" id="apiSave">Lưu &amp; tải</button><button class="btn f" id="apiDemo">Dữ liệu mẫu</button><button class="btn f" id="apiX">Đóng</button></div></div></div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js"></script>
 <script>
 const $=s=>document.querySelector(s);
-async function jf(u){try{const r=await fetch(u);if(!r.ok)throw new Error('HTTP '+r.status);return await r.json()}catch(e){if(!/^https?:/.test(location.protocol)||/localhost|127\./.test(u))throw e;const r=await fetch('/proxy?url='+encodeURIComponent(u));if(!r.ok)throw e;return await r.json()}}
+async function net(u){try{const r=await fetch(u,{signal:AbortSignal.timeout?AbortSignal.timeout(12000):undefined});if(!r.ok)throw new Error('HTTP '+r.status);return await r.json()}catch(e){if(!/^https?:/.test(location.protocol)||/localhost|127\./.test(u))throw e;const r=await fetch('/proxy?url='+encodeURIComponent(u));if(!r.ok)throw e;return await r.json()}}
 if('serviceWorker' in navigator&&/^https?:/.test(location.protocol))navigator.serviceWorker.register('sw.js').catch(()=>{});
+const MEM=new Map();
+async function jf(u){const h=MEM.get(u);if(h&&Date.now()-h.t<3e5)return h.d;const d=await net(u);MEM.set(u,{t:Date.now(),d});return d}
+let hp;const needHls=()=>hp||(hp=new Promise((ok,no)=>{if(window.Hls)return ok();const e=document.createElement('script');e.src='https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js';e.onload=ok;e.onerror=()=>{hp=null;no()};document.head.appendChild(e)}));
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const sg=(k,d)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}};
 const ss=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
+const OPT=()=>sg('imgopt',1)!==0;
+const im=(u,w)=>!u?'':OPT()&&/^https?:/.test(u)?'https://wsrv.nl/?url='+encodeURIComponent(u)+'&w='+w+'&we&q=72&output=webp':u;
+function ie(i){const o=i.dataset.o;if(o&&i.src!==o){i.src=o}else i.remove()}
 const TABS=['Phim Bộ','Phim Lẻ','Hoạt Hình','Tất Cả'],TY=['series','single','hoathinh',''];
 const names=['Đêm Sài Gòn','Hành Tinh Cuối','Kiếm Khách','Mùa Hè Năm Ấy','Đại Dương Xanh','Bóng Tối','Thành Phố Ngủ','Cung Đường Mới','Ký Ức Mưa','Cuộc Đua','Vùng Đất Lạ','Hoàng Hôn'];
 const demo=names.map((t,i)=>({id:'d'+i,demo:1,title:t,year:2026-(i%5),hue:(i*37)%360,img:'',type:['series','single','hoathinh'][i%3],ep:i%3==1?'Full':(8+i)+'/24 tập',slug:'',o:'',desc:'Nội dung mẫu. Nhập API thật để xem phim.',mod:''}));
@@ -106,37 +112,41 @@ function norm(j){
     return{id:String(m.slug||m._id||m.id||i),title:m.name||m.title||'Phim',o:m.origin_name||'',year:m.year||'',hue:(i*37)%360,img,slug:m.slug||'',ep,type:m.type||(ep?(/full/i.test(ep)?'single':'series'):''),desc:'',mod:(m.modified&&m.modified.time)||''};
   });
 }
-const poster=(m,o)=>{o=o||{};return `<div class="c f" tabindex="0" data-act="open" data-id="${esc(m.id)}"><div class="pz" style="background:${grad(m)}">${m.img?`<img src="${esc(m.img)}" alt="" loading="lazy" onerror="this.remove()">`:''}<b>${esc(m.title)}</b>${o.top?`<div class="bd">TOP<i>10</i></div>`:''}${m.ep?`<div class="lb"><b>${/full/i.test(m.ep)?'FULL':'TẬP MỚI'}</b><s>${esc(m.ep)}</s></div>`:''}</div>${o.p!=null?`<div class="bar"><i style="width:${o.p}%"></i></div>`:''}</div>`};
+const poster=(m,o)=>{o=o||{};return `<div class="c f" tabindex="0" data-act="open" data-id="${esc(m.id)}"><div class="pz" style="background:${grad(m)}">${m.img?`<img src="${esc(im(m.img,300))}" data-o="${esc(m.img)}" alt="" loading="lazy" decoding="async" onload="this.classList.add('l')" onerror="ie(this)">`:''}<b>${esc(m.title)}</b>${o.top?`<div class="bd">TOP<i>10</i></div>`:''}${m.ep?`<div class="lb"><b>${/full/i.test(m.ep)?'FULL':'TẬP MỚI'}</b><s>${esc(m.ep)}</s></div>`:''}</div>${o.p!=null?`<div class="bar"><i style="width:${o.p}%"></i></div>`:''}</div>`};
 const sec=(t,h)=>`<div class="sh"><h2>${t}</h2><span>›</span></div><div class="rw">${h}</div>`;
 const flt=()=>movies.filter(m=>(tab<0||!TY[tab]||m.type===TY[tab])&&(!q||(m.title+' '+m.o).toLowerCase().includes(q)));
-const gridOf=(l,e,w)=>l.length?`<div class="grid">${l.map(m=>poster(m,{p:w?m.p:null})).join('')}</div>`:`<p class="em">${e}</p>`;
+let gl=[],gw=0,gn=0,gio;
+const gridOf=(l,e,w)=>{if(!l.length)return `<p class="em">${e}</p>`;gl=l;gw=w;gn=36;return `<div class="grid" id="gd">${l.slice(0,36).map(m=>poster(m,{p:w?m.p:null})).join('')}</div>${l.length>36?'<div id="gs" style="height:1px"></div>':''}`};
+function gmore(){const g=$('#gd'),s=$('#gs');if(!g)return;g.insertAdjacentHTML('beforeend',gl.slice(gn,gn+36).map(m=>poster(m,{p:gw?m.p:null})).join(''));gn+=36;if(gn>=gl.length){s&&s.remove();gio&&gio.disconnect()}else if(gio&&s){gio.unobserve(s);gio.observe(s)}}
+function watchGrid(){if(gio)gio.disconnect();const s=$('#gs');if(!s||!('IntersectionObserver' in window))return;gio=new IntersectionObserver(es=>{if(es[0].isIntersecting)gmore()},{rootMargin:'800px'});gio.observe(s)}
 function home(){
   const late=[...movies].sort((a,b)=>String(b.mod).localeCompare(String(a.mod))||(+b.year||0)-(+a.year||0)),w=sg('watching',[]);
   const bo=movies.filter(m=>m.type==='series'),le=movies.filter(m=>m.type==='single');
   return `<div id="hero"></div>${sec('Thịnh hành',movies.slice(0,10).map(m=>poster(m,{top:1})).join(''))}
 <div class="bn f" tabindex="0" data-act="api"><b>NHẬP API</b><small>để xem phim thật từ KKPhim, OPhim...</small></div>
-${sec('Phim mới nhất',late.map(m=>poster(m)).join(''))}${w.length?sec('Đang xem',w.map(m=>poster(m,{p:m.p})).join('')):''}
-${bo.length?sec('Phim bộ hot',bo.map(m=>poster(m)).join('')):''}${le.length?sec('Phim lẻ đặc sắc',le.map(m=>poster(m)).join('')):''}`;
+${sec('Phim mới nhất',late.slice(0,24).map(m=>poster(m)).join(''))}${w.length?sec('Đang xem',w.map(m=>poster(m,{p:m.p})).join('')):''}
+${bo.length?sec('Phim bộ hot',bo.slice(0,24).map(m=>poster(m)).join('')):''}${le.length?sec('Phim lẻ đặc sắc',le.slice(0,24).map(m=>poster(m)).join('')):''}`;
 }
 const acc=()=>`<div class="ac"><div class="av">🙂</div><div><b>Khách</b><small>Xem thông tin tài khoản</small></div></div>
 <div class="row2 f" tabindex="0" data-act="api">⚙ Cấu hình API <span>›</span></div>
 <div class="row2 f" tabindex="0" data-act="nav" data-v="watch">⏯ Đang xem <span>›</span></div>
 <div class="row2 f" tabindex="0" data-act="nav" data-v="list">🔖 Danh sách của tôi <span>›</span></div>
-<div class="row2 f" tabindex="0" data-act="clr">🗑 Xóa lịch sử xem <span>›</span></div><p class="ver">Phiên bản ứng dụng 1.0.0</p>`;
+<div class="row2 f" tabindex="0" data-act="clr">🗑 Xóa lịch sử xem <span>›</span></div><div class="row2 f" tabindex="0" data-act="imgopt">🖼 Tối ưu ảnh: ${OPT()?'Bật':'Tắt'} <span>›</span></div><p class="ver">Phiên bản ứng dụng 1.0.0</p>`;
 function r(){
   document.querySelectorAll('.nv').forEach(b=>b.classList.toggle('on',b.dataset.v===nv));
   $('#tabs').innerHTML=view==='home'||view==='grid'?TABS.map((t,i)=>`<button class="tb f ${view==='grid'&&i===tab?'on':''}" data-act="tab" data-i="${i}">${t}</button>`).join(''):'';
   $('#app').innerHTML=view==='home'?home():view==='grid'?gridOf(flt(),'Không có phim phù hợp với dữ liệu API này.'):view==='genre'?genreV():view==='watch'?'<div class="sh"><h2>Đang xem</h2></div>'+gridOf(sg('watching',[]),'Chưa có phim nào đang xem.',1):view==='list'?'<div class="sh"><h2>Danh sách của tôi</h2></div>'+gridOf(sg('mylist',[]),'Chưa có phim nào. Nhấn Danh sách để thêm.'):acc();
   if(view==='home')paintHero();
+  watchGrid();
 }
 function paintHero(){
   const el=$('#hero');if(!el)return;const f=movies.slice(0,6),n=f.length;if(!n)return;
-  const at=d=>f[((hi+d)%n+n)%n],bg=m=>`background:${m.img?`url("${m.img.replace(/"/g,'%22')}") center/cover,`:''}${grad(m)}`,h=at(0);
+  const at=d=>f[((hi+d)%n+n)%n],bg=m=>`background:${m.img?`url("${im(m.img,520).replace(/"/g,'%22')}") center/cover,`:''}${grad(m)}`,h=at(0);
   el.innerHTML=`<div class="cf"><div class="hs" style="${bg(at(-1))}" data-act="hero" data-d="-1"></div><div class="hc f" tabindex="0" style="${bg(h)}" data-act="open" data-id="${esc(h.id)}"><b>${esc(h.title)}</b></div><div class="hs" style="${bg(at(1))}" data-act="hero" data-d="1"></div></div>
 <div class="top"><div class="t10">TOP<br>10</div><span>#${hi%n+1} tại Phim hôm nay</span></div>
 <div class="hb"><button class="s f" data-act="add" data-id="${esc(h.id)}"><span>＋</span>Danh sách</button><button class="go f" data-act="open" data-id="${esc(h.id)}">▶ Xem ngay</button><button class="s f" data-act="open" data-id="${esc(h.id)}"><span>ⓘ</span>Chi tiết</button></div>`;
 }
-setInterval(()=>{const el=$('#hero');if(view==='home'&&el&&!$('#det').classList.contains('on')&&!el.contains(document.activeElement)){hi++;paintHero()}},5000);
+setInterval(()=>{const el=$('#hero');if(!document.hidden&&view==='home'&&el&&!$('#det').classList.contains('on')&&!el.contains(document.activeElement)){hi++;paintHero()}},5000);
 function toggleList(id){
   const m=find(id);if(!m)return;let l=sg('mylist',[]);
   l=l.some(x=>x.id===id)?l.filter(x=>x.id!==id):[{...m},...l];ss('mylist',l);
@@ -145,7 +155,7 @@ function toggleList(id){
 }
 function det(){
   const m=cur,w=sg('watching',[]).find(x=>x.id===m.id),on=sg('mylist',[]).some(x=>x.id===m.id);
-  $('#det').innerHTML=`<div class="vb"><video id="vid" controls playsinline poster="${esc(m.img)}"></video><div class="vm" id="vm"></div><span class="age">T13</span><button class="x f" data-act="close">✕</button></div>
+  $('#det').innerHTML=`<div class="vb"><video id="vid" controls playsinline poster="${esc(im(m.img,640))}"></video><div class="vm" id="vm"></div><span class="age">T13</span><button class="x f" data-act="close">✕</button></div>
 <div class="di"><h1>${esc(m.title)}</h1><div class="meta">${esc(m.year)}${m.ep?' | '+esc(m.ep):''} | Full HD</div>
 <button class="gw f" data-act="resume">▶ ${w?'Xem tiếp':'Xem ngay'}</button>
 ${w?`<div class="cp">${esc(w.en||'Tập '+((w.e||0)+1))}</div><div class="pr"><i style="width:${w.p||0}%"></i></div>`:''}
@@ -185,14 +195,13 @@ function save(po){
   const p=po!=null?po:(d?Math.min(100,Math.round(v.currentTime/d*100)):(old?old.p:0));
   w=w.filter(x=>x.id!==cur.id);w.unshift({...cur,p,e:epi,en:eps[epi]&&eps[epi].name,t:v?v.currentTime:0});ss('watching',w.slice(0,20));
 }
-function play(i,t){
+async function play(i,t){
   const x=eps[i];if(!x)return;epi=i;rng=Math.floor(i/10);epl();
   const v=$('#vid'),vm=$('#vm');
   if(!x.link){vm.textContent='Chưa có nguồn phát cho tập này (cần API thật).';const o=sg('watching',[]).find(y=>y.id===cur.id);save(Math.min(100,((o&&o.p)||0)+15));return}
   vm.textContent='';const go=()=>{if(t)v.currentTime=t;v.play().catch(()=>{})};
   if(v.canPlayType('application/vnd.apple.mpegurl')){v.src=x.link}
-  else if(window.Hls&&Hls.isSupported()){if(hls)hls.destroy();hls=new Hls();hls.loadSource(x.link);hls.attachMedia(v)}
-  else v.src=x.link;
+  else{try{await needHls()}catch(e){}if(window.Hls&&Hls.isSupported()){if(hls)hls.destroy();hls=new Hls();hls.loadSource(x.link);hls.attachMedia(v)}else v.src=x.link}
   v.onloadedmetadata=go;save();
 }
 function closeDet(){
@@ -215,10 +224,11 @@ document.addEventListener('click',e=>{
   else if(a==='t2'){document.querySelectorAll('.t2 button').forEach((b,i)=>b.classList.toggle('on',i===+t.dataset.i));$('#epl').style.display=t.dataset.i==='0'?'':'none';$('#rec').style.display=t.dataset.i==='0'?'none':''}
   else if(a==='clr'){ss('watching',[]);r()}
   else if(a==='genre')pickGenre(t.dataset.s);
+  else if(a==='imgopt'){ss('imgopt',OPT()?0:1);r()}
   else if(a==='api'){$('#apiIn').value=sg('api','');$('#apiM').classList.add('on');$('#apiIn').focus()}
 });
 document.addEventListener('change',e=>{if(e.target.id==='rgs'){rng=+e.target.value;epl()}});
-$('#qi').oninput=e=>{q=e.target.value.trim().toLowerCase();view='grid';tab=-1;nv='';r()};
+let qt;$('#qi').oninput=e=>{clearTimeout(qt);const v=e.target.value;qt=setTimeout(()=>{q=v.trim().toLowerCase();view='grid';tab=-1;nv='';r()},180)};
 const GENRES=[['Bí Ẩn','bi-an'],['Chiến Tranh','chien-tranh'],['Chính Kịch','chinh-kich'],['Cổ Trang','co-trang'],['Gia Đình','gia-dinh'],['Hài Hước','hai-huoc'],['Hành Động','hanh-dong'],['Hình Sự','hinh-su'],['Học Đường','hoc-duong'],['Khoa Học','khoa-hoc'],['Kinh Dị','kinh-di'],['Kinh Điển','kinh-dien'],['Lịch Sử','lich-su'],['Miền Tây','mien-tay'],['Phim Ngắn','phim-ngan'],['Phiêu Lưu','phieu-luu'],['Thần Thoại','than-thoai'],['Thể Thao','the-thao'],['Trẻ Em','tre-em'],['Tài Liệu','tai-lieu'],['Tâm Lý','tam-ly'],['Tình Cảm','tinh-cam'],['Viễn Tưởng','vien-tuong'],['Võ Thuật','vo-thuat'],['Âm Nhạc','am-nhac']].map(a=>({name:a[0],slug:a[1]}));
 let genres=GENRES,gsel='',gmsg='';
 const JF=u=>typeof jf==='function'?jf(u):fetch(u).then(r=>r.json());
@@ -231,7 +241,7 @@ $('#apiSave').onclick=async()=>{
   const u=$('#apiIn').value.trim();if(!u)return;$('#apiMsg').textContent='Đang tải...';
   try{
     const l=norm(await jf(u));if(!l.length)throw new Error('Danh sách trống');
-    movies=l;ss('api',u);hi=0;r();$('#apiM').classList.remove('on');
+    movies=l;ss('api',u);ss('listcache',{u,l});hi=0;r();$('#apiM').classList.remove('on');
   }catch(e){$('#apiMsg').textContent='Lỗi: '+e.message+'. Kiểm tra link hoặc kết nối mạng.'}
 };
 // Điều khiển bằng remote TV
@@ -252,5 +262,5 @@ document.addEventListener('keydown',e=>{
   if(best){best.focus();best.scrollIntoView({block:'center',inline:'center',behavior:'smooth'})}
 });
 r();
-(async()=>{const u=sg('api','');if(u){try{movies=norm(await jf(u));r()}catch(e){}}})();
+(async()=>{const u=sg('api','');if(!u)return;const c=sg('listcache',null);if(c&&c.u===u&&c.l&&c.l.length){movies=c.l;r()}try{movies=norm(await jf(u));ss('listcache',{u,l:movies});r()}catch(e){}})();
 </script></body></html>
