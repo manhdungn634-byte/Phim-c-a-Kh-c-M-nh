@@ -383,4 +383,5 @@ async function boot(){
   r();
 }
 boot();
+window.__back=()=>{if(fsEl()){exitFs();return true}if($('#det').classList.contains('on')){closeDet();return true}if(view!=='home'||q){view='home';tab=-1;nv='home';q='';$('#qi').value='';r();return true}return false};
 </script></body></html>
