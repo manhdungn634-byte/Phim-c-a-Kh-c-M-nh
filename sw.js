@@ -1,7 +1,7 @@
-const C='phim-v2',I='phim-img',A=['./','./index.html','./icon-192.png','./icon-512.png'];
+const C='phim-v3',I='phim-img',A=['./','./index.html','./icon-192.png','./icon-512.png'];
 self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(C).then(c=>c.addAll(A)))});
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==C&&x!==I).map(x=>caches.delete(x)))).then(()=>self.clients.claim())));
-async function trim(c){const k=await c.keys();if(k.length>240)await Promise.all(k.slice(0,k.length-240).map(x=>c.delete(x)))}
+async function trim(c){const k=await c.keys();if(k.length>300)await Promise.all(k.slice(0,k.length-300).map(x=>c.delete(x)))}
 self.addEventListener('fetch',e=>{
   const rq=e.request;if(rq.method!=='GET')return;
   if(rq.destination==='image'){
