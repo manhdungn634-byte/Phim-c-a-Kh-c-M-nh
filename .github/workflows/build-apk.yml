@@ -1,0 +1,303 @@
+name: Build APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['index.html', 'icon-512.png', '.github/workflows/build-apk.yml']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Tao project Android tu web
+        run: |
+          set -e
+          A=android
+          mkdir -p $A/app/src/main/java/com/phim/app $A/app/src/main/res/values $A/app/src/main/res/drawable-xhdpi $A/app/src/main/assets
+          cp index.html $A/app/src/main/assets/index.html
+          for f in manifest.json icon-192.png icon-512.png icon.svg; do [ -f "$f" ] && cp "$f" $A/app/src/main/assets/ || true; done
+          sed -i "/^if('serviceWorker' in navigator/d" $A/app/src/main/assets/index.html
+
+          cat > $A/settings.gradle <<'EOF'
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement { repositories { google(); mavenCentral() } }
+          rootProject.name = 'Phim'
+          include ':app'
+          EOF
+          cat > $A/build.gradle <<'EOF'
+          plugins { id 'com.android.application' version '8.5.2' apply false }
+          EOF
+          cat > $A/gradle.properties <<'EOF'
+          android.useAndroidX=true
+          org.gradle.jvmargs=-Xmx2g
+          EOF
+          cat > $A/app/build.gradle <<'EOF'
+          plugins { id 'com.android.application' }
+          android {
+              namespace 'com.phim.app'
+              compileSdk 34
+              defaultConfig {
+                  applicationId 'com.phim.app'
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName '1.0'
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+          }
+          dependencies { implementation 'androidx.webkit:webkit:1.11.0' }
+          EOF
+          cat > $A/app/src/main/AndroidManifest.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+              <uses-feature android:name="android.software.leanback" android:required="false" />
+              <application
+                  android:label="Phim"
+                  android:icon="@mipmap/ic_launcher"
+                  android:banner="@drawable/banner"
+                  android:theme="@style/AppTheme"
+                  android:usesCleartextTraffic="true"
+                  android:allowBackup="false"
+                  android:hardwareAccelerated="true">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:launchMode="singleTask"
+                      android:configChanges="orientation|screenSize|keyboardHidden|keyboard|navigation|smallestScreenSize|screenLayout|uiMode">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                          <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+          cat > $A/app/src/main/res/values/styles.xml <<'EOF'
+          <resources>
+              <style name="AppTheme" parent="android:Theme.Material.NoActionBar">
+                  <item name="android:windowBackground">@android:color/black</item>
+              </style>
+          </resources>
+          EOF
+          cat > $A/app/src/main/java/com/phim/app/MainActivity.java <<'EOF'
+          package com.phim.app;
+
+          import android.app.Activity;
+          import android.content.Intent;
+          import android.content.pm.ActivityInfo;
+          import android.graphics.Color;
+          import android.os.Bundle;
+          import android.view.View;
+          import android.webkit.WebChromeClient;
+          import android.webkit.WebResourceRequest;
+          import android.webkit.WebResourceResponse;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+          import android.widget.FrameLayout;
+          import androidx.webkit.WebViewAssetLoader;
+          import java.io.InputStream;
+          import java.net.HttpURLConnection;
+          import java.net.URL;
+          import java.util.HashMap;
+          import java.util.Map;
+
+          public class MainActivity extends Activity {
+              static final String HOST = "appassets.androidplatform.net";
+              WebView wv;
+              FrameLayout root;
+              View custom;
+              WebChromeClient.CustomViewCallback ccb;
+
+              @Override
+              protected void onCreate(Bundle b) {
+                  super.onCreate(b);
+                  int bg = Color.parseColor("#101010");
+                  getWindow().setStatusBarColor(bg);
+                  getWindow().setNavigationBarColor(bg);
+                  root = new FrameLayout(this);
+                  root.setBackgroundColor(bg);
+                  wv = new WebView(this);
+                  wv.setBackgroundColor(bg);
+                  root.addView(wv, new FrameLayout.LayoutParams(-1, -1));
+                  setContentView(root);
+
+                  final WebViewAssetLoader loader = new WebViewAssetLoader.Builder()
+                          .setDomain(HOST)
+                          .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
+                          .build();
+
+                  WebSettings s = wv.getSettings();
+                  s.setJavaScriptEnabled(true);
+                  s.setDomStorageEnabled(true);
+                  s.setMediaPlaybackRequiresUserGesture(false);
+                  s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+
+                  wv.setWebViewClient(new WebViewClient() {
+                      @Override
+                      public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest r) {
+                          if (HOST.equals(r.getUrl().getHost())) return loader.shouldInterceptRequest(r.getUrl());
+                          // Yêu cầu fetch/XHR sang domain khác: tải bằng mạng của app và thêm CORS
+                          if ("GET".equals(r.getMethod()) && hasOrigin(r.getRequestHeaders())) {
+                              return proxy(r.getUrl().toString(), r.getRequestHeaders());
+                          }
+                          return null;
+                      }
+
+                      @Override
+                      public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
+                          if (HOST.equals(r.getUrl().getHost())) return false;
+                          try { startActivity(new Intent(Intent.ACTION_VIEW, r.getUrl())); } catch (Exception e) { }
+                          return true;
+                      }
+                  });
+
+                  wv.setWebChromeClient(new WebChromeClient() {
+                      @Override
+                      public void onShowCustomView(View v, CustomViewCallback cb) {
+                          if (custom != null) { cb.onCustomViewHidden(); return; }
+                          custom = v;
+                          ccb = cb;
+                          root.addView(v, new FrameLayout.LayoutParams(-1, -1));
+                          wv.setVisibility(View.GONE);
+                          setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+                          bars(true);
+                      }
+
+                      @Override
+                      public void onHideCustomView() {
+                          if (custom == null) return;
+                          root.removeView(custom);
+                          custom = null;
+                          wv.setVisibility(View.VISIBLE);
+                          if (ccb != null) ccb.onCustomViewHidden();
+                          setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+                          bars(false);
+                      }
+                  });
+
+                  wv.loadUrl("https://" + HOST + "/assets/index.html");
+                  wv.requestFocus();
+              }
+
+              static boolean hasOrigin(Map<String, String> h) {
+                  if (h == null) return false;
+                  for (String k : h.keySet()) if (k.equalsIgnoreCase("Origin")) return true;
+                  return false;
+              }
+
+              static WebResourceResponse proxy(String url, Map<String, String> h) {
+                  try {
+                      HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+                      c.setConnectTimeout(15000);
+                      c.setReadTimeout(30000);
+                      c.setInstanceFollowRedirects(true);
+                      for (Map.Entry<String, String> e : h.entrySet()) {
+                          String k = e.getKey();
+                          if (k.equalsIgnoreCase("Origin") || k.equalsIgnoreCase("Referer") || k.equalsIgnoreCase("Host")
+                                  || k.equalsIgnoreCase("Accept-Encoding")) continue;
+                          c.setRequestProperty(k, e.getValue());
+                      }
+                      int code = c.getResponseCode();
+                      InputStream in = code >= 400 ? c.getErrorStream() : c.getInputStream();
+                      String mime = "application/octet-stream", enc = null;
+                      String ct = c.getContentType();
+                      if (ct != null) {
+                          String[] p = ct.split(";");
+                          mime = p[0].trim();
+                          for (String x : p) if (x.trim().toLowerCase().startsWith("charset=")) enc = x.trim().substring(8);
+                      }
+                      Map<String, String> rh = new HashMap<>();
+                      rh.put("Access-Control-Allow-Origin", "*");
+                      String cr = c.getHeaderField("Content-Range");
+                      if (cr != null) rh.put("Content-Range", cr);
+                      String reason = c.getResponseMessage();
+                      if (reason == null || reason.isEmpty()) reason = "OK";
+                      return new WebResourceResponse(mime, enc, code, reason, rh, in);
+                  } catch (Exception e) {
+                      return null;
+                  }
+              }
+
+              void bars(boolean hide) {
+                  getWindow().getDecorView().setSystemUiVisibility(hide
+                          ? (View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                          | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_STABLE)
+                          : 0);
+              }
+
+              @Override
+              public void onBackPressed() {
+                  if (custom != null) { wv.getWebChromeClient().onHideCustomView(); return; }
+                  wv.evaluateJavascript("(function(){try{return window.__back?window.__back():false}catch(e){return false}})()",
+                          v -> { if (!"true".equals(v)) finish(); });
+              }
+
+              @Override
+              protected void onDestroy() {
+                  if (wv != null) wv.destroy();
+                  super.onDestroy();
+              }
+          }
+          EOF
+
+          python3 -c "import PIL" 2>/dev/null || pip install --break-system-packages -q pillow
+          python3 - <<'PY'
+          import os
+          from PIL import Image, ImageDraw, ImageFont
+          B = 'android/app/src/main/res'
+          im = Image.open('icon-512.png').convert('RGBA')
+          for d, z in [('mdpi', 48), ('hdpi', 72), ('xhdpi', 96), ('xxhdpi', 144), ('xxxhdpi', 192)]:
+              os.makedirs(f'{B}/mipmap-{d}', exist_ok=True)
+              im.resize((z, z), Image.LANCZOS).save(f'{B}/mipmap-{d}/ic_launcher.png')
+          bn = Image.new('RGB', (320, 180), (16, 16, 16))
+          ic = im.resize((110, 110), Image.LANCZOS)
+          bn.paste(ic, (40, 35), ic)
+          d = ImageDraw.Draw(bn)
+          try:
+              f = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 52)
+          except Exception:
+              f = ImageFont.load_default()
+          d.text((165, 52), 'Phim', font=f, fill=(255, 255, 255))
+          bn.save(f'{B}/drawable-xhdpi/banner.png')
+          PY
+
+      - name: Build APK
+        working-directory: android
+        run: gradle assembleDebug --no-daemon --stacktrace
+
+      - name: Doi ten APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk Phim.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Phim-apk
+          path: Phim.apk
+
+      - name: Dang APK len Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-${{ github.run_number }}
+          name: Phim APK ${{ github.run_number }}
+          files: Phim.apk
